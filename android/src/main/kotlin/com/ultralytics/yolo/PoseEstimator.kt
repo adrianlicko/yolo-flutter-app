@@ -38,10 +38,10 @@ class PoseEstimator(
 ) : BasePredictor() {
 
     companion object {
-        // xywh(4) + conf(1) + keypoints(17*3=51) = 56
-        private const val OUTPUT_FEATURES = 56
-        private const val KEYPOINTS_COUNT = 17
-        private const val KEYPOINTS_FEATURES = KEYPOINTS_COUNT * 3 // x, y, conf per keypoint
+        // xywh(4) + conf(1) + keypoints(4*2=8) = 13
+        private const val OUTPUT_FEATURES = 13
+        private const val KEYPOINTS_COUNT = 4
+        private const val KEYPOINTS_FEATURES = KEYPOINTS_COUNT * 2 // x, y, conf per keypoint
         private const val MAX_POOL_SIZE = 100 
         
         private const val INPUT_SIZE = 640
@@ -312,9 +312,10 @@ class PoseEstimator(
             val kpArray = mutableListOf<Pair<Float, Float>>()
             val kpConfArray = mutableListOf<Float>()
             for (k in 0 until KEYPOINTS_COUNT) {
-                val rawKx = features[5 + k * 3][j]
-                val rawKy = features[5 + k * 3 + 1][j]
-                val kpC   = features[5 + k * 3 + 2][j]
+                val rawKx = features[5 + k * 2][j]
+                val rawKy = features[5 + k * 2 + 1][j]
+                // my model does not send confidence for keypoints, so we set it to 1.0f for now
+                val kpC   = 1.0f 
 
                 val isNormalized = rawKx <= 1.0f && rawKy <= 1.0f
                 
