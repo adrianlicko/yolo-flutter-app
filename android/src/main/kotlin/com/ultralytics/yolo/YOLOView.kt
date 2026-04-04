@@ -8,6 +8,7 @@ import android.content.Context
 import android.content.pm.PackageManager
 import android.graphics.*
 import android.graphics.drawable.GradientDrawable
+import android.os.SystemClock
 import android.util.AttributeSet
 import android.util.Log
 import android.view.*
@@ -583,7 +584,7 @@ class YOLOView @JvmOverloads constructor(
                         .build()
 
                     imageCapture = ImageCapture.Builder()
-                        .setCaptureMode(ImageCapture.CAPTURE_MODE_MAXIMIZE_QUALITY)
+                        .setCaptureMode(ImageCapture.CAPTURE_MODE_MINIMIZE_LATENCY)
                         .build()
 
                     cameraExecutor = Executors.newSingleThreadExecutor()
@@ -1945,12 +1946,17 @@ class YOLOView @JvmOverloads constructor(
             return
         }
 
+        val captureStartMs = SystemClock.elapsedRealtime()
+        Log.d(TAG, "takeHighResPhoto: capture requested")
+
         capture.takePicture(ContextCompat.getMainExecutor(context), object : ImageCapture.OnImageCapturedCallback() {
             override fun onCaptureSuccess(image: ImageProxy) {
                 try {
                     val buffer = image.planes[0].buffer
                     val bytes = ByteArray(buffer.remaining())
                     buffer.get(bytes)
+                    val captureElapsedMs = SystemClock.elapsedRealtime() - captureStartMs
+                    Log.d(TAG, "takeHighResPhoto: capture success in ${captureElapsedMs} ms (${bytes.size} bytes)")
                     callback(bytes)
                 } catch (e: Exception) {
                     Log.e(TAG, "Failed to process captured photo", e)
@@ -1961,6 +1967,8 @@ class YOLOView @JvmOverloads constructor(
             }
 
             override fun onError(exception: ImageCaptureException) {
+                val captureElapsedMs = SystemClock.elapsedRealtime() - captureStartMs
+                Log.e(TAG, "takeHighResPhoto: capture failed after ${captureElapsedMs} ms", exception)
                 Log.e(TAG, "Photo capture failed", exception)
                 callback(null)
             }
