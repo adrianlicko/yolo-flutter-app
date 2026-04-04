@@ -47,6 +47,9 @@ class YOLOView @JvmOverloads constructor(
 
         private const val TAG = "YOLOView"
 
+        @Volatile
+        var currentInstance: YOLOView? = null
+
         // Line thickness and corner radius
         private const val BOX_LINE_WIDTH = 8f
         private const val BOX_CORNER_RADIUS = 12f
@@ -208,6 +211,7 @@ class YOLOView @JvmOverloads constructor(
     // New fields for proper teardown:
     private var cameraExecutor: ExecutorService? = null
     private var imageAnalysisUseCase: ImageAnalysis? = null
+    private var imageCapture: ImageCapture? = null
     
     // Flag to track if the view is stopped/disposed to prevent race conditions
     @Volatile
@@ -231,6 +235,8 @@ class YOLOView @JvmOverloads constructor(
     private var showUIControls = false
 
     init {
+        currentInstance = this
+
         // Clear any existing children
         removeAllViews()
 
@@ -534,6 +540,10 @@ class YOLOView @JvmOverloads constructor(
                         .setTargetAspectRatio(AspectRatio.RATIO_4_3)
                         .build()
 
+                    imageCapture = ImageCapture.Builder()
+                        .setCaptureMode(ImageCapture.CAPTURE_MODE_MAXIMIZE_QUALITY)
+                        .build()
+
                     cameraExecutor = Executors.newSingleThreadExecutor()
                     imageAnalysisUseCase!!.setAnalyzer(cameraExecutor!!) { imageProxy ->
                         onFrame(imageProxy)
@@ -558,7 +568,8 @@ class YOLOView @JvmOverloads constructor(
                             owner,
                             cameraSelector,
                             previewUseCase,
-                            imageAnalysisUseCase  // the field, not a local val
+                            imageAnalysisUseCase,  // the field, not a local val
+                            imageCapture
                         )
                         
                         // Reset zoom to 1.0x when camera starts
@@ -1813,11 +1824,58 @@ class YOLOView @JvmOverloads constructor(
         }
     }
 
+    fun takeHighResPhoto(callback: (ByteArray?) -> Unit) {
+        val capture = imageCapture ?: run {
+            Log.e(TAG, "ImageCapture is not initialized")
+            callback(null)
+            return
+        }
+
+        capture.takePicture(ContextCompat.getMainExecutor(context), object : ImageCapture.OnImageCapturedCallback() {
+            override fun onCaptureSuccess(image: ImageProxy) {
+                try {
+                    val buffer = image.planes[0].buffer
+                    val bytes = ByteArray(buffer.remaining())
+                    buffer.get(bytes)
+                    callback(bytes)
+                } catch (e: Exception) {
+                    Log.e(TAG, "Failed to process captured photo", e)
+                    callback(null)
+                } finally {
+                    image.close()
+                }
+            }
+
+            override fun onError(exception: ImageCaptureException) {
+                Log.e(TAG, "Photo capture failed", exception)
+                callback(null)
+            }
+        })
+    }
+
+    fun setFlashlight(enable: Boolean): Boolean {
+        return try {
+            val cam = camera ?: return false
+            if (!cam.cameraInfo.hasFlashUnit()) {
+                Log.w(TAG, "Device has no flash unit")
+                false
+            } else {
+                cam.cameraControl.enableTorch(enable)
+                true
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to toggle flashlight", e)
+            false
+        }
+    }
+
     /**
      * Stop camera and inference (can be restarted later)
      */
     fun stop() {
         Log.d(TAG, "YOLOView.stop() called - tearing down camera")
+
+        if (currentInstance == this) currentInstance = null
         
         // Set stopped flag first to prevent new frames from being processed
         isStopped = true
@@ -1835,6 +1893,7 @@ class YOLOView @JvmOverloads constructor(
             }
 
             imageAnalysisUseCase = null
+            imageCapture = null
 
             previewUseCase?.setSurfaceProvider(null)
             previewUseCase = null
