@@ -34,6 +34,7 @@ class YOLOView extends StatefulWidget {
   final double iouThreshold;
   final DelegateMode delegateMode;
   final bool showOverlays;
+  final bool detectionEnabled;
   final YOLOOverlayTheme overlayTheme;
   final LensFacing lensFacing;
 
@@ -53,6 +54,7 @@ class YOLOView extends StatefulWidget {
     this.iouThreshold = 0.45,
     this.delegateMode = DelegateMode.gpu,
     this.showOverlays = true,
+    this.detectionEnabled = true,
     this.overlayTheme = const YOLOOverlayTheme(),
     this.lensFacing = LensFacing.back,
   });
@@ -242,6 +244,16 @@ class _YOLOViewState extends State<YOLOView> {
       });
     }
 
+    if (oldWidget.detectionEnabled != widget.detectionEnabled) {
+      _effectiveController.setDetectionEnabled(widget.detectionEnabled);
+
+      if (!widget.detectionEnabled) {
+        setState(() {
+          _currentDetections = [];
+        });
+      }
+    }
+
     // Handle model or task changes
     if (_platformViewId != null &&
         (oldWidget.modelPath != widget.modelPath ||
@@ -320,6 +332,7 @@ class _YOLOViewState extends State<YOLOView> {
       'viewId': _viewId,
       'delegateMode': widget.delegateMode.name,
       'showOverlays': widget.showOverlays,
+      'detectionEnabled': widget.detectionEnabled,
       'lensFacing': widget.lensFacing.name,
     };
 
@@ -365,6 +378,7 @@ class _YOLOViewState extends State<YOLOView> {
     _methodChannel.invokeMethod('setShowUIControls', {
       'show': widget.showNativeUI,
     });
+    _effectiveController.setDetectionEnabled(widget.detectionEnabled);
 
     if (widget.streamingConfig != null) {
       _effectiveController.setStreamingConfig(widget.streamingConfig!);
@@ -418,4 +432,6 @@ class _YOLOViewState extends State<YOLOView> {
       _effectiveController.setZoomLevel(zoomLevel);
   Future<void> setShowOverlays(bool show) =>
       _effectiveController.setShowOverlays(show);
+  Future<void> setDetectionEnabled(bool enabled) =>
+      _effectiveController.setDetectionEnabled(enabled);
 }

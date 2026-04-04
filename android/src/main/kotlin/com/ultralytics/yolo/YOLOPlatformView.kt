@@ -63,6 +63,7 @@ class YOLOPlatformView(
         val confidenceParam = creationParams?.get("confidenceThreshold") as? Double ?: 0.5
         val iouParam = creationParams?.get("iouThreshold") as? Double ?: 0.45
         val showOverlaysParam = creationParams?.get("showOverlays") as? Boolean ?: true
+        val detectionEnabledParam = creationParams?.get("detectionEnabled") as? Boolean ?: true
         
         // Parse lensFacing parameter
         val lensFacingParam = creationParams?.get("lensFacing") as? String ?: "back"
@@ -79,6 +80,7 @@ class YOLOPlatformView(
         yoloView.setConfidenceThreshold(confidenceParam)
         yoloView.setIouThreshold(iouParam)
         yoloView.setShowOverlays(showOverlaysParam)
+        yoloView.setDetectionEnabled(detectionEnabledParam)
         
         // Set lens facing before initializing camera
         Log.d(TAG, "Setting lens facing: $lensFacingParam")
@@ -353,6 +355,15 @@ class YOLOPlatformView(
                         result.success(null)
                     } else {
                         result.error("invalid_args", "show is required", null)
+                    }
+                }
+                "setDetectionEnabled" -> {
+                    val enabled = call.argument<Boolean>("enabled")
+                    if (enabled != null) {
+                        yoloView.setDetectionEnabled(enabled)
+                        result.success(null)
+                    } else {
+                        result.error("invalid_args", "enabled is required", null)
                     }
                 }
                 "setThresholds" -> {

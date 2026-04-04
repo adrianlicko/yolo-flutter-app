@@ -221,6 +221,18 @@ class YOLOViewController {
     }
   }
 
+  Future<void> setDetectionEnabled(bool enabled) async {
+    if (_methodChannel != null) {
+      try {
+        await _methodChannel!.invokeMethod('setDetectionEnabled', {
+          'enabled': enabled,
+        });
+      } catch (e) {
+        logInfo('Error setting detection enabled: $e');
+      }
+    }
+  }
+
   Future<Uint8List?> captureFrame() async {
     if (_methodChannel != null) {
       try {

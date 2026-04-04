@@ -231,6 +231,7 @@ class YOLOView @JvmOverloads constructor(
     private var iouThreshold = 0.45
     private var numItemsThreshold = 30
     private var showOverlays = true
+    private var detectionEnabled = true
     private lateinit var zoomLabel: TextView
     private lateinit var cameraButton: TextView
     private lateinit var confidenceLabel: TextView
@@ -408,6 +409,16 @@ class YOLOView @JvmOverloads constructor(
     
     fun setShowOverlays(show: Boolean) {
         showOverlays = show
+    }
+
+    fun setDetectionEnabled(enabled: Boolean) {
+        detectionEnabled = enabled
+        if (!enabled) {
+            inferenceResult = null
+            post {
+                overlayView.invalidate()
+            }
+        }
     }
     
     fun setShowUIControls(show: Boolean) {
@@ -778,6 +789,11 @@ class YOLOView @JvmOverloads constructor(
         }
 
         predictor?.let { p ->
+            if (!detectionEnabled) {
+                imageProxy.close()
+                return
+            }
+
             // Double-check stopped flag before inference (predictor might be closed)
             if (isStopped) {
                 Log.d(TAG, "onFrame: View stopped before inference, skipping")
