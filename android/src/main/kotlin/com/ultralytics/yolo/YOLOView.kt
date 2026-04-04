@@ -405,15 +405,15 @@ class YOLOView @JvmOverloads constructor(
 
     // region Model / Task
 
-    fun setModel(modelPath: String, task: YOLOTask, useGpu: Boolean = true, callback: ((Boolean) -> Unit)? = null) {
+    fun setModel(modelPath: String, task: YOLOTask, delegateMode: DelegateMode = DelegateMode.gpu, callback: ((Boolean) -> Unit)? = null) {
         Executors.newSingleThreadExecutor().execute {
             try {
                 val newPredictor = when (task) {
-                    YOLOTask.DETECT -> ObjectDetector(context = context, modelPath = modelPath, labels = loadLabels(modelPath), useGpu = useGpu)
-                    YOLOTask.SEGMENT -> Segmenter(context, modelPath, labels = loadLabels(modelPath), useGpu = useGpu)
-                    YOLOTask.CLASSIFY -> Classifier(context, modelPath, labels = loadLabels(modelPath), useGpu = useGpu)
-                    YOLOTask.POSE -> PoseEstimator(context, modelPath, labels = loadLabels(modelPath), useGpu = useGpu)
-                    YOLOTask.OBB -> ObbDetector(context, modelPath, labels = loadLabels(modelPath), useGpu = useGpu)
+                    YOLOTask.DETECT -> ObjectDetector(context = context, modelPath = modelPath, labels = loadLabels(modelPath), delegateMode = delegateMode)
+                    YOLOTask.SEGMENT -> Segmenter(context, modelPath, labels = loadLabels(modelPath), delegateMode = delegateMode)
+                    YOLOTask.CLASSIFY -> Classifier(context, modelPath, labels = loadLabels(modelPath), delegateMode = delegateMode)
+                    YOLOTask.POSE -> PoseEstimator(context, modelPath, labels = loadLabels(modelPath), delegateMode = delegateMode)
+                    YOLOTask.OBB -> ObbDetector(context, modelPath, labels = loadLabels(modelPath), delegateMode = delegateMode)
                 }
                 
                 // Apply thresholds to all predictor types

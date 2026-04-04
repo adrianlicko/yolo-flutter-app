@@ -157,7 +157,7 @@ class YOLOPlugin : FlutterPlugin, ActivityAware, MethodChannel.MethodCallHandler
           var modelPath = args?.get("modelPath") as? String ?: "yolo11n"
           val taskString = args?.get("task") as? String ?: "detect"
           val instanceId = args?.get("instanceId") as? String ?: "default"
-          val useGpu = args?.get("useGpu") as? Boolean ?: true
+          val delegateMode = DelegateMode.fromString(args?.get("delegateMode") as? String ?: "gpu")
           val classifierOptionsMap = args?.get("classifierOptions") as? Map<String, Any>
           var numItemsThreshold = args?.get("numItemsThreshold") as? Int ?: 30
           
@@ -184,7 +184,7 @@ class YOLOPlugin : FlutterPlugin, ActivityAware, MethodChannel.MethodCallHandler
             context = applicationContext,
             modelPath = modelPath,
             task = task,
-            useGpu = useGpu,
+            delegateMode = delegateMode,
             numItemsThreshold = numItemsThreshold,
             classifierOptions = classifierOptions
           ) { loadResult ->
@@ -192,7 +192,7 @@ class YOLOPlugin : FlutterPlugin, ActivityAware, MethodChannel.MethodCallHandler
               Log.d(TAG,"task CLASSIFY not support numItemsThreshold ignore it.")
             }
             if (loadResult.isSuccess) {
-              Log.d(TAG, "Model loaded successfully: $modelPath for task: $task, instance: $instanceId, useGpu: $useGpu ${if (classifierOptions != null) "with classifier options" else ""}")
+              Log.d(TAG, "Model loaded successfully: $modelPath for task: $task, instance: $instanceId, delegateMode: $delegateMode ${if (classifierOptions != null) "with classifier options" else ""}")
               result.success(true)
             } else {
               Log.e(TAG, "Failed to load model for instance $instanceId", loadResult.exceptionOrNull())
@@ -415,24 +415,24 @@ class YOLOPlugin : FlutterPlugin, ActivityAware, MethodChannel.MethodCallHandler
           val viewId = args?.get("viewId") as? Int
           val modelPath = args?.get("modelPath") as? String
           val taskString = args?.get("task") as? String
-          val useGpu = args?.get("useGpu") as? Boolean ?: true
-          
+          val delegateMode = DelegateMode.fromString(args?.get("delegateMode") as? String ?: "gpu")
+
           if (viewId == null || modelPath == null || taskString == null) {
             result.error("bad_args", "Missing required arguments for setModel", null)
             return
           }
-          
+
           // Get the YOLOPlatformView instance from the factory
           val platformView = viewFactory.activeViews[viewId]
           if (platformView != null) {
             // Resolve the model path
             val resolvedPath = resolveModelPath(modelPath)
-            
+
             // Convert task string to enum
             val task = YOLOTask.valueOf(taskString.uppercase())
-            
+
             // Call setModel on the YOLOView inside the platform view
-            platformView.yoloViewInstance.setModel(resolvedPath, task, useGpu) { success ->
+            platformView.yoloViewInstance.setModel(resolvedPath, task, delegateMode) { success ->
               if (success) {
                 result.success(null)
               } else {

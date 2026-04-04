@@ -5,7 +5,96 @@ package com.ultralytics.yolo
 import android.content.Context
 import android.graphics.Color
 import android.util.Log
+import org.tensorflow.lite.Interpreter
+import org.tensorflow.lite.gpu.GpuDelegate
+import org.tensorflow.lite.nnapi.NnApiDelegate
 import org.tensorflow.lite.support.common.FileUtil
+
+/**
+ * Hardware delegate mode, matching the Dart [DelegateMode] enum.
+ */
+enum class DelegateMode {
+    cpu,
+    gpu,
+    autoDelegate;
+
+    companion object {
+        fun fromString(value: String): DelegateMode =
+            entries.firstOrNull { it.name == value } ?: gpu
+    }
+}
+
+/**
+ * Creates an Interpreter with the delegate specified by [mode].
+ *
+ * [DelegateMode.autoDelegate] - NNAPI -> GPU -> CPU fallback chain
+ * (avoids PowerVR OpenCL driver crashes on Tensor G6 etc.)
+ * [DelegateMode.gpu] - GPU delegate only.
+ * [DelegateMode.cpu] - CPU only.
+ */
+fun createInterpreterWithBestDelegate(
+    modelBuffer: java.nio.MappedByteBuffer,
+    configureBaseOptions: Interpreter.Options.() -> Unit,
+    mode: DelegateMode,
+    tag: String
+): Interpreter {
+    when (mode) {
+        DelegateMode.autoDelegate -> {
+            // NNAPI -> GPU -> CPU
+            try {
+                val options = Interpreter.Options().apply {
+                    configureBaseOptions()
+                    addDelegate(NnApiDelegate())
+                }
+                return Interpreter(modelBuffer, options).also {
+                    Log.d(tag, "NNAPI delegate is used.")
+                }
+            } catch (e: Exception) {
+                Log.w(tag, "NNAPI delegate failed: ${e.message}, trying GPU delegate")
+            }
+
+            try {
+                val options = Interpreter.Options().apply {
+                    configureBaseOptions()
+                    addDelegate(GpuDelegate())
+                }
+                return Interpreter(modelBuffer, options).also {
+                    Log.d(tag, "GPU delegate is used (auto fallback).")
+                }
+            } catch (e: Exception) {
+                Log.w(tag, "GPU delegate also failed: ${e.message}, falling back to CPU")
+            }
+
+            return Interpreter(modelBuffer, Interpreter.Options().apply { configureBaseOptions() }).also {
+                Log.d(tag, "CPU inference is used (auto fallback).")
+            }
+        }
+
+        DelegateMode.gpu -> {
+            try {
+                val options = Interpreter.Options().apply {
+                    configureBaseOptions()
+                    addDelegate(GpuDelegate())
+                }
+                return Interpreter(modelBuffer, options).also {
+                    Log.d(tag, "GPU delegate is used.")
+                }
+            } catch (e: Exception) {
+                Log.e(tag, "GPU delegate error: ${e.message}, falling back to CPU")
+            }
+
+            return Interpreter(modelBuffer, Interpreter.Options().apply { configureBaseOptions() }).also {
+                Log.d(tag, "CPU inference is used.")
+            }
+        }
+
+        DelegateMode.cpu -> {
+            return Interpreter(modelBuffer, Interpreter.Options().apply { configureBaseOptions() }).also {
+                Log.d(tag, "CPU inference is used.")
+            }
+        }
+    }
+}
 
 val ultralyticsColors: List<Int> = listOf(
     Color.argb(153, 4, 42, 255),

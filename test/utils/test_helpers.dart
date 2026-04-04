@@ -278,7 +278,7 @@ class YOLOTestHelpers {
     return {
       'task': task.name,
       'modelPath': 'assets/models/yolo11n.tflite',
-      'useGpu': true,
+      'delegateMode': 'gpu',
       'confidenceThreshold': 0.5,
       'iouThreshold': 0.45,
       'numItemsThreshold': 30,

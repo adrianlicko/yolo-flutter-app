@@ -46,7 +46,7 @@ object YOLOInstanceManager {
     }
 
     /**
-     * Loads a model for a specific instance (overload without useGpu for backward compatibility)
+     * Loads a model for a specific instance (overload for backward compatibility)
      */
     fun loadModel(
         instanceId: String,
@@ -55,27 +55,26 @@ object YOLOInstanceManager {
         task: YOLOTask,
         callback: (Result<Unit>) -> Unit
     ) {
-        // Call the main implementation with default useGpu = true
         loadModel(
             instanceId = instanceId,
             context = context,
             modelPath = modelPath,
             task = task,
-            useGpu = true,
+            delegateMode = DelegateMode.gpu,
             classifierOptions = null,
             callback = callback
         )
     }
 
     /**
-     * Loads a model for a specific instance with GPU control and classifier options
+     * Loads a model for a specific instance with delegate mode control and classifier options
      */
     fun loadModel(
         instanceId: String,
         context: Context,
         modelPath: String,
         task: YOLOTask,
-        useGpu: Boolean = true,
+        delegateMode: DelegateMode = DelegateMode.gpu,
         numItemsThreshold: Int = 30,
         classifierOptions: Map<String, Any>?,
         callback: (Result<Unit>) -> Unit
@@ -104,7 +103,7 @@ object YOLOInstanceManager {
             }
 
             // Create YOLO instance with the specified parameters
-            val yolo = YOLO(context, modelPath, task, emptyList(), useGpu, numItemsThreshold, classifierOptions)
+            val yolo = YOLO(context, modelPath, task, emptyList(), delegateMode = delegateMode, numItemsThreshold = numItemsThreshold, classifierOptions = classifierOptions)
             instances[instanceId] = yolo
             loadingStates[instanceId] = false
             Log.d(TAG, "Model loaded successfully for instance: $instanceId ${if (classifierOptions != null) "with classifier options" else ""}")

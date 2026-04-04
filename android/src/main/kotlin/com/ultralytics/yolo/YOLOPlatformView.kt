@@ -133,8 +133,10 @@ class YOLOPlatformView(
             }
             
             // Load model
-            val useGpu = creationParams?.get("useGpu") as? Boolean ?: true
-            yoloView.setModel(modelPath, task, useGpu)
+            val delegateMode = DelegateMode.fromString(
+                creationParams?.get("delegateMode") as? String ?: "gpu"
+            )
+            yoloView.setModel(modelPath, task, delegateMode)
             
         } catch (e: Exception) {
             Log.e(TAG, "Error initializing YOLOPlatformView", e)
@@ -367,17 +369,19 @@ class YOLOPlatformView(
                 "setModel" -> {
                     var modelPath = call.argument<String>("modelPath")
                     val taskString = call.argument<String>("task")
-                    val useGpu = call.argument<Boolean>("useGpu") ?: true
-                    
+                    val delegateMode = DelegateMode.fromString(
+                        call.argument<String>("delegateMode") ?: "gpu"
+                    )
+
                     if (modelPath == null || taskString == null) {
                         result.error("invalid_args", "modelPath and task are required", null)
                         return
                     }
-                    
+
                     modelPath = resolveModelPath(context, modelPath)
                     val task = YOLOTask.valueOf(taskString.uppercase())
-                    
-                    yoloView.setModel(modelPath, task, useGpu) { success ->
+
+                    yoloView.setModel(modelPath, task, delegateMode) { success ->
                         if (success) {
                             Log.d(TAG, "Model switched successfully")
                             result.success(null)

@@ -3,6 +3,7 @@
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:ultralytics_yolo/core/yolo_model_manager.dart';
+import 'package:ultralytics_yolo/models/delegate_mode.dart';
 import 'package:ultralytics_yolo/models/yolo_task.dart';
 import 'package:ultralytics_yolo/models/yolo_exceptions.dart';
 import 'utils/test_helpers.dart';
@@ -32,7 +33,7 @@ void main() {
         instanceId: 'test_instance',
         modelPath: 'test_model.tflite',
         task: YOLOTask.detect,
-        useGpu: true,
+        delegateMode: DelegateMode.gpu,
       );
 
       expect(manager, isNotNull);
@@ -44,7 +45,7 @@ void main() {
         instanceId: 'test_instance',
         modelPath: 'classifier_model.tflite',
         task: YOLOTask.classify,
-        useGpu: false,
+        delegateMode: DelegateMode.cpu,
         classifierOptions: {
           'enable1ChannelSupport': true,
           'expectedChannels': 1,
@@ -61,7 +62,7 @@ void main() {
         instanceId: 'custom_instance',
         modelPath: 'test_model.tflite',
         task: YOLOTask.detect,
-        useGpu: true,
+        delegateMode: DelegateMode.gpu,
       );
 
       await manager.initializeInstance();
@@ -79,7 +80,7 @@ void main() {
         instanceId: 'default',
         modelPath: 'test_model.tflite',
         task: YOLOTask.detect,
-        useGpu: true,
+        delegateMode: DelegateMode.gpu,
       );
 
       await manager.initializeInstance();
@@ -94,7 +95,7 @@ void main() {
         instanceId: 'test_instance',
         modelPath: 'test_model.tflite',
         task: YOLOTask.detect,
-        useGpu: true,
+        delegateMode: DelegateMode.gpu,
       );
 
       final result = await manager.loadModel();
@@ -106,7 +107,7 @@ void main() {
         arguments: {
           'modelPath': 'test_model.tflite',
           'task': 'detect',
-          'useGpu': true,
+          'delegateMode': 'gpu',
           'numItemsThreshold': 30,
           'instanceId': 'test_instance',
         },
@@ -119,7 +120,7 @@ void main() {
         instanceId: 'test_instance',
         modelPath: 'classifier_model.tflite',
         task: YOLOTask.classify,
-        useGpu: false,
+        delegateMode: DelegateMode.cpu,
         classifierOptions: {
           'enable1ChannelSupport': true,
           'expectedChannels': 1,
@@ -134,7 +135,7 @@ void main() {
         arguments: {
           'modelPath': 'classifier_model.tflite',
           'task': 'classify',
-          'useGpu': false,
+          'delegateMode': 'cpu',
           'numItemsThreshold': 30,
           'classifierOptions': {
             'enable1ChannelSupport': true,
@@ -160,7 +161,7 @@ void main() {
         instanceId: 'test_instance',
         modelPath: 'nonexistent_model.tflite',
         task: YOLOTask.detect,
-        useGpu: true,
+        delegateMode: DelegateMode.gpu,
       );
 
       expect(() => manager.loadModel(), throwsA(isA<YOLOException>()));
@@ -172,7 +173,7 @@ void main() {
         instanceId: 'test_instance',
         modelPath: 'old_model.tflite',
         task: YOLOTask.detect,
-        useGpu: true,
+        delegateMode: DelegateMode.gpu,
         viewId: 123,
       );
 
@@ -185,7 +186,7 @@ void main() {
           'viewId': 123,
           'modelPath': 'new_model.tflite',
           'task': 'segment',
-          'useGpu': true,
+          'delegateMode': 'gpu',
           'instanceId': 'test_instance',
         },
       );
@@ -197,7 +198,7 @@ void main() {
         instanceId: 'test_instance',
         modelPath: 'test_model.tflite',
         task: YOLOTask.detect,
-        useGpu: true,
+        delegateMode: DelegateMode.gpu,
       );
 
       expect(
@@ -221,7 +222,7 @@ void main() {
         instanceId: 'test_instance',
         modelPath: 'test_model.tflite',
         task: YOLOTask.detect,
-        useGpu: true,
+        delegateMode: DelegateMode.gpu,
         viewId: 123,
       );
 
@@ -237,7 +238,7 @@ void main() {
         instanceId: 'test_instance',
         modelPath: 'test_model.tflite',
         task: YOLOTask.detect,
-        useGpu: true,
+        delegateMode: DelegateMode.gpu,
       );
 
       manager.setViewId(456);
@@ -250,7 +251,7 @@ void main() {
         instanceId: 'test_instance',
         modelPath: 'test_model.tflite',
         task: YOLOTask.detect,
-        useGpu: true,
+        delegateMode: DelegateMode.gpu,
       );
 
       await manager.dispose();
@@ -277,7 +278,7 @@ void main() {
         instanceId: 'test_instance',
         modelPath: 'test_model.tflite',
         task: YOLOTask.detect,
-        useGpu: true,
+        delegateMode: DelegateMode.gpu,
       );
 
       // Should not throw exception
@@ -291,7 +292,7 @@ void main() {
         instanceId: 'default',
         modelPath: 'test_model.tflite',
         task: YOLOTask.detect,
-        useGpu: true,
+        delegateMode: DelegateMode.gpu,
       );
 
       await manager.loadModel();
@@ -302,7 +303,7 @@ void main() {
         arguments: {
           'modelPath': 'test_model.tflite',
           'task': 'detect',
-          'useGpu': true,
+          'delegateMode': 'gpu',
           'numItemsThreshold': 30,
         },
       );

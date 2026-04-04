@@ -23,7 +23,7 @@ class YOLO(
     private val modelPath: String,
     val task: YOLOTask,
     private val labels: List<String> = emptyList(),
-    private val useGpu: Boolean = true,
+    private val delegateMode: DelegateMode = DelegateMode.gpu,
     private var numItemsThreshold: Int = 30,
     private val classifierOptions: Map<String, Any>? = null
 ) {
@@ -58,11 +58,11 @@ class YOLO(
     private val predictor: Predictor by lazy {
         val options = createCustomOptions()
         when (task) {
-            YOLOTask.DETECT -> ObjectDetector(context, modelPath, labels, useGpu, numItemsThreshold = numItemsThreshold, customOptions = options)
-            YOLOTask.SEGMENT -> Segmenter(context, modelPath, labels, useGpu, numItemsThreshold = numItemsThreshold, customOptions = options)
-            YOLOTask.CLASSIFY -> Classifier(context, modelPath, labels, useGpu, options, classifierOptions)
-            YOLOTask.POSE -> PoseEstimator(context, modelPath, labels, useGpu, numItemsThreshold = numItemsThreshold, customOptions = options)
-            YOLOTask.OBB -> ObbDetector(context, modelPath, labels, useGpu, numItemsThreshold = numItemsThreshold, customOptions = options)
+            YOLOTask.DETECT -> ObjectDetector(context, modelPath, labels, delegateMode = delegateMode, numItemsThreshold = numItemsThreshold, customOptions = options)
+            YOLOTask.SEGMENT -> Segmenter(context, modelPath, labels, delegateMode = delegateMode, numItemsThreshold = numItemsThreshold, customOptions = options)
+            YOLOTask.CLASSIFY -> Classifier(context, modelPath, labels, delegateMode = delegateMode, customOptions = options, classifierOptions = classifierOptions)
+            YOLOTask.POSE -> PoseEstimator(context, modelPath, labels, delegateMode = delegateMode, numItemsThreshold = numItemsThreshold, customOptions = options)
+            YOLOTask.OBB -> ObbDetector(context, modelPath, labels, delegateMode = delegateMode, numItemsThreshold = numItemsThreshold, customOptions = options)
         }
     }
 

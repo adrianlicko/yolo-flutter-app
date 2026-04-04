@@ -8,6 +8,7 @@ import android.util.Log
 import org.tensorflow.lite.DataType
 import org.tensorflow.lite.Interpreter
 import org.tensorflow.lite.gpu.GpuDelegate
+import org.tensorflow.lite.nnapi.NnApiDelegate
 import org.tensorflow.lite.support.common.FileUtil
 import org.tensorflow.lite.support.common.ops.CastOp
 import org.tensorflow.lite.support.common.ops.NormalizeOp
@@ -29,27 +30,16 @@ class ObbDetector(
     context: Context,
     modelPath: String,
     override var labels: List<String>,
-    private val useGpu: Boolean = true,
+    private val delegateMode: DelegateMode = DelegateMode.gpu,
     private var numItemsThreshold: Int = 30,
     private val customOptions: Interpreter.Options? = null
 ) : BasePredictor() {
     
 //    private var numItemsThreshold = 30
 
-    private val interpreterOptions: Interpreter.Options = (customOptions ?: Interpreter.Options()).apply {
-        // If no custom options provided, use default threads
-        if (customOptions == null) {
-            setNumThreads(Runtime.getRuntime().availableProcessors())
-        }
-        
-        if (useGpu) {
-            try {
-                addDelegate(GpuDelegate())
-                Log.d("ObbDetector", "GPU delegate is used.")
-            } catch (e: Exception) {
-                Log.e("ObbDetector", "GPU delegate error: ${e.message}")
-            }
-        }
+    private val baseOptionsConfig: Interpreter.Options.() -> Unit = {
+        setNumThreads(Runtime.getRuntime().availableProcessors())
+        setAllowFp16PrecisionForFp32(true)
     }
 
     // Similar to PoseEstimator, use ImageProcessor - separate ones for camera portrait/landscape and single images
@@ -98,7 +88,7 @@ class ObbDetector(
             }
         }
 
-        interpreter = Interpreter(modelBuffer, interpreterOptions)
+        interpreter = createInterpreterWithBestDelegate(modelBuffer, baseOptionsConfig, delegateMode, "ObbDetector")
         // Call allocateTensors() once during initialization, not in the inference loop
         interpreter.allocateTensors()
         Log.d("ObbDetector", "TFLite model loaded and tensors allocated")

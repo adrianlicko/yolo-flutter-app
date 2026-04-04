@@ -7,6 +7,7 @@ import 'package:flutter/services.dart';
 import 'package:ultralytics_yolo/utils/logger.dart';
 import 'package:ultralytics_yolo/models/yolo_result.dart';
 import 'package:ultralytics_yolo/models/yolo_task.dart';
+import 'package:ultralytics_yolo/models/delegate_mode.dart';
 import 'package:ultralytics_yolo/yolo_streaming_config.dart';
 import 'package:ultralytics_yolo/yolo_performance_metrics.dart';
 import 'package:ultralytics_yolo/utils/map_converter.dart';
@@ -31,7 +32,7 @@ class YOLOView extends StatefulWidget {
   final YOLOStreamingConfig? streamingConfig;
   final double confidenceThreshold;
   final double iouThreshold;
-  final bool useGpu;
+  final DelegateMode delegateMode;
   final bool showOverlays;
   final YOLOOverlayTheme overlayTheme;
   final LensFacing lensFacing;
@@ -50,7 +51,7 @@ class YOLOView extends StatefulWidget {
     this.streamingConfig,
     this.confidenceThreshold = 0.5,
     this.iouThreshold = 0.45,
-    this.useGpu = true,
+    this.delegateMode = DelegateMode.gpu,
     this.showOverlays = true,
     this.overlayTheme = const YOLOOverlayTheme(),
     this.lensFacing = LensFacing.back,
@@ -317,7 +318,7 @@ class _YOLOViewState extends State<YOLOView> {
       'iouThreshold': widget.iouThreshold,
       'numItemsThreshold': _effectiveController.numItemsThreshold,
       'viewId': _viewId,
-      'useGpu': widget.useGpu,
+      'delegateMode': widget.delegateMode.name,
       'showOverlays': widget.showOverlays,
       'lensFacing': widget.lensFacing.name,
     };

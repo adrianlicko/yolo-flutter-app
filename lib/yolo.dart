@@ -1,6 +1,7 @@
 // Ultralytics 🚀 AGPL-3.0 License - https://ultralytics.com/license
 
 import 'package:flutter/services.dart';
+import 'package:ultralytics_yolo/models/delegate_mode.dart';
 import 'package:ultralytics_yolo/models/yolo_task.dart';
 import 'package:ultralytics_yolo/models/yolo_exceptions.dart';
 import 'package:ultralytics_yolo/yolo_instance_manager.dart';
@@ -25,7 +26,7 @@ export 'yolo_instance_manager.dart';
 /// final yolo = YOLO(
 ///   modelPath: 'assets/models/yolo11n.tflite',
 ///   task: YOLOTask.detect,
-///   useGpu: false, // Disable GPU for stability on some devices
+///   delegateMode: DelegateMode.cpu, // CPU for stability on some devices
 /// );
 ///
 /// await yolo.loadModel();
@@ -56,14 +57,13 @@ class YOLO {
   /// The type of task this YOLO model will perform (detection, segmentation, etc.)
   final YOLOTask task;
 
-  /// Whether to use GPU acceleration for inference.
+  /// Controls which hardware delegate is used for inference.
   ///
-  /// On Android, this controls TensorFlow Lite GPU delegate usage.
-  /// On iOS, this controls Core ML GPU usage.
-  ///
-  /// Default is true for better performance, but can be set to false
-  /// for stability on devices where GPU inference causes crashes.
-  final bool useGpu;
+  /// [DelegateMode.gpu] — GPU delegate (default, best single-device performance).
+  /// [DelegateMode.cpu] — CPU only (safest fallback).
+  /// [DelegateMode.autoDelegate] — NNAPI → GPU → CPU fallback chain
+  /// (recommended for broad device compatibility).
+  final DelegateMode delegateMode;
 
   late int numItemsThreshold;
 
@@ -77,14 +77,14 @@ class YOLO {
   ///
   /// The [modelPath] can refer to a model in assets, internal storage, or absolute path.
   /// The [task] specifies what type of inference will be performed.
-  /// The [useGpu] parameter controls whether to use GPU acceleration (default: true).
+  /// The [delegateMode] parameter controls hardware acceleration (default: [DelegateMode.gpu]).
   ///
   /// If [useMultiInstance] is true, each YOLO instance gets a unique ID and its own channel.
   /// If false, uses the default channel for backward compatibility.
   YOLO({
     required this.modelPath,
     required this.task,
-    this.useGpu = true,
+    this.delegateMode = DelegateMode.gpu,
     bool useMultiInstance = false,
     this.classifierOptions,
     int? numItemsThreshold,
@@ -112,7 +112,7 @@ class YOLO {
       instanceId: _instanceId,
       modelPath: modelPath,
       task: task,
-      useGpu: useGpu,
+      delegateMode: delegateMode,
       classifierOptions: classifierOptions,
       viewId: _viewId,
       numItemsThreshold: numItemsThreshold,
@@ -335,13 +335,13 @@ class YOLO {
     required String modelPath,
     required YOLOTask task,
     required Map<String, dynamic> classifierOptions,
-    bool useGpu = true,
+    DelegateMode delegateMode = DelegateMode.gpu,
     bool useMultiInstance = false,
   }) {
     return YOLO(
       modelPath: modelPath,
       task: task,
-      useGpu: useGpu,
+      delegateMode: delegateMode,
       useMultiInstance: useMultiInstance,
       classifierOptions: classifierOptions,
     );

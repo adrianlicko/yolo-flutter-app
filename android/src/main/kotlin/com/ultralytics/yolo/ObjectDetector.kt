@@ -8,6 +8,7 @@ import android.util.Log
 import org.tensorflow.lite.DataType
 import org.tensorflow.lite.Interpreter
 import org.tensorflow.lite.gpu.GpuDelegate
+import org.tensorflow.lite.nnapi.NnApiDelegate
 import org.tensorflow.lite.support.common.FileUtil
 import org.tensorflow.lite.support.common.ops.CastOp
 import org.tensorflow.lite.support.common.ops.NormalizeOp
@@ -40,7 +41,7 @@ class ObjectDetector(
     context: Context,
     modelPath: String,
     override var labels: List<String>,
-    private val useGpu: Boolean = true,
+    private val delegateMode: DelegateMode = DelegateMode.gpu,
     private var numItemsThreshold: Int = 30,
     private val customOptions: Interpreter.Options? = null
 ) : BasePredictor() {
@@ -73,22 +74,9 @@ class ObjectDetector(
     // (3) ByteBuffer for TFLite input (1 * height * width * 3 * 4 bytes)
     private lateinit var inputBuffer: ByteBuffer
 
-    // Options for TensorFlow Lite Interpreter
-    private val interpreterOptions: Interpreter.Options = (customOptions ?: Interpreter.Options()).apply {
-        // If no custom options provided, use default threads
-        if (customOptions == null) {
-            setNumThreads(Runtime.getRuntime().availableProcessors())
-        }
-        
-        // If customOptions is provided, only add GPU delegate if requested
-        if (useGpu) {
-            try {
-                addDelegate(GpuDelegate())
-                Log.d("ObjectDetector", "GPU delegate is used.")
-            } catch (e: Exception) {
-                Log.e("ObjectDetector", "GPU delegate error: ${e.message}")
-            }
-        }
+    private val baseOptionsConfig: Interpreter.Options.() -> Unit = {
+        setNumThreads(Runtime.getRuntime().availableProcessors())
+        setAllowFp16PrecisionForFp32(true)
     }
 
     // ========== TFLite Interpreter ==========
@@ -125,7 +113,7 @@ class ObjectDetector(
             }
         }
 
-        interpreter = Interpreter(modelBuffer, interpreterOptions)
+        interpreter = createInterpreterWithBestDelegate(modelBuffer, baseOptionsConfig, delegateMode, TAG)
         // Call allocateTensors() once during initialization, not in the inference loop
         interpreter.allocateTensors()
         Log.d("TAG", "TFLite model loaded: $modelPath, tensors allocated")

@@ -1,6 +1,7 @@
 // Ultralytics 🚀 AGPL-3.0 License - https://ultralytics.com/license
 
 import 'package:flutter/services.dart';
+import 'package:ultralytics_yolo/models/delegate_mode.dart';
 import 'package:ultralytics_yolo/models/yolo_task.dart';
 import 'package:ultralytics_yolo/models/yolo_exceptions.dart';
 import 'package:ultralytics_yolo/utils/error_handler.dart';
@@ -12,7 +13,7 @@ class YOLOModelManager {
   final String _instanceId;
   final String _modelPath;
   final YOLOTask _task;
-  final bool _useGpu;
+  final DelegateMode _delegateMode;
   final int _numItemsThreshold;
   final Map<String, dynamic>? _classifierOptions;
   int? _viewId;
@@ -24,7 +25,7 @@ class YOLOModelManager {
     required String instanceId,
     required String modelPath,
     required YOLOTask task,
-    required bool useGpu,
+    required DelegateMode delegateMode,
     Map<String, dynamic>? classifierOptions,
     int? viewId,
     int? numItemsThreshold,
@@ -32,7 +33,7 @@ class YOLOModelManager {
        _instanceId = instanceId,
        _modelPath = modelPath,
        _task = task,
-       _useGpu = useGpu,
+       _delegateMode = delegateMode,
        _classifierOptions = classifierOptions,
        _viewId = viewId,
        _numItemsThreshold = numItemsThreshold ?? 30;
@@ -78,7 +79,7 @@ class YOLOModelManager {
       final Map<String, dynamic> arguments = {
         'modelPath': _modelPath,
         'task': _task.name,
-        'useGpu': _useGpu,
+        'delegateMode': _delegateMode.name,
         'numItemsThreshold': _numItemsThreshold,
       };
 
@@ -115,7 +116,7 @@ class YOLOModelManager {
         'viewId': _viewId,
         'modelPath': newModelPath,
         'task': newTask.name,
-        'useGpu': _useGpu,
+        'delegateMode': _delegateMode.name,
       };
 
       if (_instanceId != 'default') {

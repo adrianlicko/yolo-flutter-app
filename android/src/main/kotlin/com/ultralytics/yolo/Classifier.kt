@@ -8,6 +8,7 @@ import android.util.Log
 import org.tensorflow.lite.DataType
 import org.tensorflow.lite.Interpreter
 import org.tensorflow.lite.gpu.GpuDelegate
+import org.tensorflow.lite.nnapi.NnApiDelegate
 import org.tensorflow.lite.support.common.FileUtil
 import org.tensorflow.lite.support.common.ops.CastOp
 import org.tensorflow.lite.support.common.ops.NormalizeOp
@@ -26,26 +27,14 @@ class Classifier(
     context: Context,
     modelPath: String,
     override var labels: List<String> = emptyList(),
-    private val useGpu: Boolean = true,
+    private val delegateMode: DelegateMode = DelegateMode.gpu,
     private val customOptions: Interpreter.Options? = null,
     private val classifierOptions: Map<String, Any>? = null
 ) : BasePredictor() {
 
-    private val interpreterOptions: Interpreter.Options = (customOptions ?: Interpreter.Options()).apply {
-        // If no custom options provided, use default threads
-        if (customOptions == null) {
-            setNumThreads(4)
-        }
-        
-        // Add GPU delegate if requested
-        if (useGpu) {
-            try {
-                addDelegate(GpuDelegate())
-                Log.d(TAG, "GPU delegate is used.")
-            } catch (e: Exception) {
-                Log.e(TAG, "GPU delegate error: ${e.message}")
-            }
-        }
+    private val baseOptionsConfig: Interpreter.Options.() -> Unit = {
+        setNumThreads(Runtime.getRuntime().availableProcessors())
+        setAllowFp16PrecisionForFp32(true)
     }
 
     var numClass: Int = 0
@@ -89,7 +78,7 @@ class Classifier(
             }
         }
 
-        interpreter = Interpreter(modelBuffer, interpreterOptions)
+        interpreter = createInterpreterWithBestDelegate(modelBuffer, baseOptionsConfig, delegateMode, TAG)
 
         val inputShape = interpreter.getInputTensor(0).shape()
         val inBatch = inputShape[0]

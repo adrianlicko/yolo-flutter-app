@@ -9,6 +9,7 @@ import android.util.Size
 import org.tensorflow.lite.DataType
 import org.tensorflow.lite.Interpreter
 import org.tensorflow.lite.gpu.GpuDelegate
+import org.tensorflow.lite.nnapi.NnApiDelegate
 import org.tensorflow.lite.support.common.FileUtil
 import org.tensorflow.lite.support.common.ops.CastOp
 import org.tensorflow.lite.support.common.ops.NormalizeOp
@@ -30,7 +31,7 @@ class PoseEstimator(
     context: Context,
     modelPath: String,
     override var labels: List<String>,
-    private val useGpu: Boolean = true,
+    private val delegateMode: DelegateMode = DelegateMode.gpu,
     private var confidenceThreshold: Float = 0.25f,   // Can be changed as needed
     private var iouThreshold: Float = 0.45f,          // Can be changed as needed
     private var numItemsThreshold: Int = 30,
@@ -86,20 +87,9 @@ class PoseEstimator(
         }
     }
 
-    private val interpreterOptions = (customOptions ?: Interpreter.Options()).apply {
-        // If no custom options provided, use default threads
-        if (customOptions == null) {
-            setNumThreads(Runtime.getRuntime().availableProcessors())
-        }
-        
-        if (useGpu) {
-            try {
-                addDelegate(GpuDelegate())
-                Log.d("PoseEstimator", "GPU delegate is used.")
-            } catch (e: Exception) {
-                Log.e("PoseEstimator", "GPU delegate error: ${e.message}")
-            }
-        }
+    private val baseOptionsConfig: Interpreter.Options.() -> Unit = {
+        setNumThreads(Runtime.getRuntime().availableProcessors())
+        setAllowFp16PrecisionForFp32(true)
     }
 
     private lateinit var imageProcessorCameraPortrait: ImageProcessor
@@ -143,7 +133,7 @@ class PoseEstimator(
             }
         }
 
-        interpreter = Interpreter(modelBuffer, interpreterOptions)
+        interpreter = createInterpreterWithBestDelegate(modelBuffer, baseOptionsConfig, delegateMode, "PoseEstimator")
         // Call allocateTensors() once during initialization
         interpreter.allocateTensors()
         Log.d("PoseEstimator", "TFLite model loaded and tensors allocated")
