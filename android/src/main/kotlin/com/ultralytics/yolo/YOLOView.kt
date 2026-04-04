@@ -7,6 +7,7 @@ import android.app.Activity
 import android.content.Context
 import android.content.pm.PackageManager
 import android.graphics.*
+import android.graphics.drawable.GradientDrawable
 import android.util.AttributeSet
 import android.util.Log
 import android.view.*
@@ -222,6 +223,7 @@ class YOLOView @JvmOverloads constructor(
     private var minZoomRatio = 1.0f
     private var maxZoomRatio = 10.0f
     private lateinit var scaleGestureDetector: ScaleGestureDetector
+    private lateinit var tapGestureDetector: GestureDetector
     var onZoomChanged: ((Float) -> Unit)? = null
 
     // detection thresholds (can be changed externally via setters)
@@ -232,6 +234,7 @@ class YOLOView @JvmOverloads constructor(
     private lateinit var zoomLabel: TextView
     private lateinit var cameraButton: TextView
     private lateinit var confidenceLabel: TextView
+    private lateinit var focusIndicatorView: View
     private var showUIControls = false
 
     init {
@@ -267,7 +270,22 @@ class YOLOView @JvmOverloads constructor(
         overlayView.elevation = 100f
         overlayView.translationZ = 100f
         previewContainer.elevation = 1f
-        
+
+        val focusIndicatorSize = (56 * resources.displayMetrics.density).toInt()
+        focusIndicatorView = View(context).apply {
+            layoutParams = LayoutParams(focusIndicatorSize, focusIndicatorSize)
+            background = GradientDrawable().apply {
+                shape = GradientDrawable.OVAL
+                setColor(Color.TRANSPARENT)
+                setStroke((2.5f * resources.displayMetrics.density).toInt(), Color.WHITE)
+            }
+            visibility = View.GONE
+            alpha = 0f
+            elevation = 1100f
+            translationZ = 1100f
+        }
+        addView(focusIndicatorView)
+
         // Add zoom label
         zoomLabel = TextView(context).apply {
             layoutParams = LayoutParams(
@@ -345,6 +363,19 @@ class YOLOView @JvmOverloads constructor(
                 // Notify zoom change
                 onZoomChanged?.invoke(currentZoomRatio)
                 
+                return true
+            }
+        })
+
+        tapGestureDetector = GestureDetector(context, object : GestureDetector.SimpleOnGestureListener() {
+            override fun onDown(event: MotionEvent): Boolean = true
+
+            override fun onSingleTapConfirmed(event: MotionEvent): Boolean {
+                if (scaleGestureDetector.isInProgress) {
+                    return false
+                }
+
+                focusAt(event.x, event.y)
                 return true
             }
         })
@@ -616,6 +647,73 @@ class YOLOView @JvmOverloads constructor(
             CameraSelector.LENS_FACING_BACK
         }
         startCamera()
+    }
+
+    private fun focusAt(x: Float, y: Float) {
+        val activeCamera = camera ?: return
+        if (previewView.width <= 0 || previewView.height <= 0) {
+            return
+        }
+
+        val clampedX = x.coerceIn(0f, previewView.width.toFloat())
+        val clampedY = y.coerceIn(0f, previewView.height.toFloat())
+        val meteringPoint = previewView.meteringPointFactory.createPoint(clampedX, clampedY)
+        val action = FocusMeteringAction.Builder(
+            meteringPoint,
+            FocusMeteringAction.FLAG_AF or FocusMeteringAction.FLAG_AE
+        ).setAutoCancelDuration(3, TimeUnit.SECONDS)
+            .build()
+
+        showFocusIndicator(clampedX, clampedY)
+
+        try {
+            val focusFuture = activeCamera.cameraControl.startFocusAndMetering(action)
+            focusFuture.addListener(
+                {
+                    try {
+                        val focusResult = focusFuture.get()
+                        Log.d(TAG, "Tap to focus completed. Success=${focusResult.isFocusSuccessful}")
+                    } catch (e: Exception) {
+                        Log.w(TAG, "Tap to focus failed", e)
+                    }
+                },
+                ContextCompat.getMainExecutor(context)
+            )
+        } catch (e: Exception) {
+            Log.w(TAG, "Unable to start tap to focus", e)
+        }
+    }
+
+    private fun showFocusIndicator(x: Float, y: Float) {
+        focusIndicatorView.animate().cancel()
+
+        val halfWidth = focusIndicatorView.layoutParams.width / 2f
+        val halfHeight = focusIndicatorView.layoutParams.height / 2f
+        val maxX = (width - focusIndicatorView.layoutParams.width).coerceAtLeast(0).toFloat()
+        val maxY = (height - focusIndicatorView.layoutParams.height).coerceAtLeast(0).toFloat()
+
+        focusIndicatorView.x = (x - halfWidth).coerceIn(0f, maxX)
+        focusIndicatorView.y = (y - halfHeight).coerceIn(0f, maxY)
+        focusIndicatorView.scaleX = 1.25f
+        focusIndicatorView.scaleY = 1.25f
+        focusIndicatorView.alpha = 1f
+        focusIndicatorView.visibility = View.VISIBLE
+
+        focusIndicatorView.animate()
+            .scaleX(1f)
+            .scaleY(1f)
+            .setDuration(120)
+            .withEndAction {
+                focusIndicatorView.animate()
+                    .alpha(0f)
+                    .setStartDelay(600)
+                    .setDuration(180)
+                    .withEndAction {
+                        focusIndicatorView.visibility = View.GONE
+                    }
+                    .start()
+            }
+            .start()
     }
 
     // endregion
@@ -1347,18 +1445,17 @@ class YOLOView @JvmOverloads constructor(
                             val baseline = centerY - (fm.descent + fm.ascent) / 2
                             val textX = labelLeft + padding
                             canvas.drawText(labelText, textX, baseline, paint)
-                        }
-                    }
-                }
-            }
-        }
-        
+	                        }
+	                    }
+	                }
+	            }
+	        }
         override fun onTouchEvent(event: MotionEvent?): Boolean {
             // Pass through all touch events
             return false
         }
     }
-    
+
     // Scale listener for pinch-to-zoom
     private inner class ScaleListener : ScaleGestureDetector.SimpleOnScaleGestureListener() {
         override fun onScaleBegin(detector: ScaleGestureDetector): Boolean {
@@ -1399,6 +1496,7 @@ class YOLOView @JvmOverloads constructor(
     // Touch event handling for pinch-to-zoom
     override fun onTouchEvent(event: MotionEvent): Boolean {
         scaleGestureDetector.onTouchEvent(event)
+        tapGestureDetector.onTouchEvent(event)
         return true
     }
     
