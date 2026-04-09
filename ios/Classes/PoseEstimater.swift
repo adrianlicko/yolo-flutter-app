@@ -140,7 +140,16 @@ class PoseEstimater: BasePredictor, @unchecked Sendable {
     -> [(box: Box, keypoints: Keypoints)]
   {
     let numAnchors = prediction.shape[2].intValue
-    let featureCount = prediction.shape[1].intValue - 5
+    let rawFeatureCount = prediction.shape[1].intValue
+    let keypointFeatureCount = 8
+    let numClasses = rawFeatureCount - 4 - keypointFeatureCount
+
+    guard numClasses >= 1 else {
+      print(
+        "PoseEstimater: Unsupported output feature size \(rawFeatureCount). Expected at least \(4 + 1 + keypointFeatureCount) for 4 keypoints."
+      )
+      return []
+    }
 
     var boxes = [CGRect]()
     var scores = [Float]()
@@ -150,8 +159,17 @@ class PoseEstimater: BasePredictor, @unchecked Sendable {
     let lock = DispatchQueue(label: "com.example.lock")
 
     DispatchQueue.concurrentPerform(iterations: numAnchors) { j in
-      let confIndex = 4 * numAnchors + j
-      let confidence = featurePointer[confIndex]
+      var classIndex = 0
+      var confidence = featurePointer[4 * numAnchors + j]
+      if numClasses > 1 {
+        for classOffset in 1..<numClasses {
+          let classScore = featurePointer[(4 + classOffset) * numAnchors + j]
+          if classScore > confidence {
+            confidence = classScore
+            classIndex = classOffset
+          }
+        }
+      }
 
       if confidence > confidenceThreshold {
         let x = featurePointer[j]
@@ -167,16 +185,19 @@ class PoseEstimater: BasePredictor, @unchecked Sendable {
           x: boxX, y: boxY,
           width: boxWidth, height: boxHeight)
 
-        var boxFeatures = [Float](repeating: 0, count: featureCount)
-        for k in 0..<featureCount {
-          let key = (5 + k) * numAnchors + j
+        var metadata = [Float](repeating: 0, count: 1)
+        metadata[0] = Float(classIndex)
+        var boxFeatures = [Float](repeating: 0, count: keypointFeatureCount)
+        let keypointOffset = 4 + numClasses
+        for k in 0..<keypointFeatureCount {
+          let key = (keypointOffset + k) * numAnchors + j
           boxFeatures[k] = featurePointer[key]
         }
 
         lock.sync {
           boxes.append(boundingBox)
           scores.append(confidence)
-          features.append(boxFeatures)
+          features.append(metadata + boxFeatures)
         }
       }
     }
@@ -191,6 +212,8 @@ class PoseEstimater: BasePredictor, @unchecked Sendable {
     let results: [(Box, Keypoints)] = zip(boxScorePairs, filteredFeatures).map {
       (pair, boxFeatures) in
       let (box, score) = pair
+      let classIndex = Int(boxFeatures[0])
+      let keypointFeatures = Array(boxFeatures.dropFirst())
       let Nx = box.origin.x / CGFloat(modelInputSize.width)
       let Ny = box.origin.y / CGFloat(modelInputSize.height)
       let Nw = box.size.width / CGFloat(modelInputSize.width)
@@ -202,17 +225,18 @@ class PoseEstimater: BasePredictor, @unchecked Sendable {
       let normalizedBox = CGRect(x: Nx, y: Ny, width: Nw, height: Nh)
       let imageSizeBox = CGRect(x: ix, y: iy, width: iw, height: ih)
       let boxResult = Box(
-        index: 0, cls: "person", conf: score, xywh: imageSizeBox, xywhn: normalizedBox)
-      let numKeypoints = boxFeatures.count / 3
+        index: classIndex, cls: labels.indices.contains(classIndex) ? labels[classIndex] : "class_\(classIndex)", conf: score, xywh: imageSizeBox,
+        xywhn: normalizedBox)
+      let numKeypoints = keypointFeatures.count / 2
 
       var xynArray = [(x: Float, y: Float)]()
       var xyArray = [(x: Float, y: Float)]()
       var confArray = [Float]()
 
       for i in 0..<numKeypoints {
-        let kx = boxFeatures[3 * i]
-        let ky = boxFeatures[3 * i + 1]
-        let kc = boxFeatures[3 * i + 2]
+        let kx = keypointFeatures[2 * i]
+        let ky = keypointFeatures[2 * i + 1]
+        let kc: Float = 1.0
 
         let nX = kx / Float(modelInputSize.width)
         let nY = ky / Float(modelInputSize.height)

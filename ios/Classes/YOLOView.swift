@@ -16,9 +16,43 @@ import AVFoundation
 import UIKit
 import Vision
 
+private func resolveBundledCoreMLModelURL(_ modelPathOrName: String) -> URL? {
+  let fileName = modelPathOrName.components(separatedBy: "/").last ?? modelPathOrName
+  let fileComponents = fileName.components(separatedBy: ".")
+  let name = fileComponents.dropLast().joined(separator: ".")
+  let ext = fileComponents.last ?? ""
+
+  if !name.isEmpty && !ext.isEmpty {
+    if let url = Bundle.main.url(forResource: name, withExtension: ext) {
+      return url
+    }
+  }
+
+  if let compiledURL = Bundle.main.url(forResource: modelPathOrName, withExtension: "mlmodelc") {
+    return compiledURL
+  }
+
+  if let packageURL = Bundle.main.url(forResource: modelPathOrName, withExtension: "mlpackage") {
+    return packageURL
+  }
+
+  if !name.isEmpty {
+    if let compiledURL = Bundle.main.url(forResource: name, withExtension: "mlmodelc") {
+      return compiledURL
+    }
+    if let packageURL = Bundle.main.url(forResource: name, withExtension: "mlpackage") {
+      return packageURL
+    }
+  }
+
+  return nil
+}
+
 /// A UIView component that provides real-time object detection, segmentation, and pose estimation capabilities.
 @MainActor
 public class YOLOView: UIView, VideoCaptureDelegate {
+  nonisolated(unsafe) public static var currentInstance: YOLOView?
+
   func onInferenceTime(speed: Double, fps: Double) {
     // Store performance data for streaming
     self.currentFps = fps
@@ -195,6 +229,7 @@ public class YOLOView: UIView, VideoCaptureDelegate {
 
   public var capturedImage: UIImage?
   private var photoCaptureCompletion: ((UIImage?) -> Void)?
+  private var rawPhotoCaptureCompletion: ((Data?) -> Void)?
 
   public init(
     frame: CGRect,
@@ -204,6 +239,7 @@ public class YOLOView: UIView, VideoCaptureDelegate {
   ) {
     self.videoCapture = VideoCapture()
     super.init(frame: frame)
+    YOLOView.currentInstance = self
     setModel(modelPathOrName: modelPathOrName, task: task)
     setUpOrientationChangeNotification()
     self.setUpBoundingBoxViews()
@@ -223,6 +259,7 @@ public class YOLOView: UIView, VideoCaptureDelegate {
   public override func awakeFromNib() {
     super.awakeFromNib()
     Task { @MainActor in
+      YOLOView.currentInstance = self
       setUpOrientationChangeNotification()
       setUpBoundingBoxViews()
       setupUI()
@@ -262,16 +299,11 @@ public class YOLOView: UIView, VideoCaptureDelegate {
         modelURL = possibleURL
         print(
           "YOLOView: Found model at: \(possibleURL.path) (isDirectory: \(isDirectory.boolValue))")
+      } else {
+        modelURL = resolveBundledCoreMLModelURL(modelPathOrName)
       }
     } else {
-      if let compiledURL = Bundle.main.url(forResource: modelPathOrName, withExtension: "mlmodelc")
-      {
-        modelURL = compiledURL
-      } else if let packageURL = Bundle.main.url(
-        forResource: modelPathOrName, withExtension: "mlpackage")
-      {
-        modelURL = packageURL
-      }
+      modelURL = resolveBundledCoreMLModelURL(modelPathOrName)
     }
 
     guard let unwrappedModelURL = modelURL else {
@@ -377,6 +409,7 @@ public class YOLOView: UIView, VideoCaptureDelegate {
 
   private func start(position: AVCaptureDevice.Position) {
     if !busy {
+      YOLOView.currentInstance = self
       busy = true
       let orientation = UIDevice.current.orientation
       videoCapture.setUp(sessionPreset: .photo, position: position, orientation: orientation) {
@@ -416,6 +449,9 @@ public class YOLOView: UIView, VideoCaptureDelegate {
   }
 
   public func stop() {
+    if YOLOView.currentInstance === self {
+      YOLOView.currentInstance = nil
+    }
     videoCapture.stop()
     videoCapture.delegate = nil
     // Release predictor to prevent memory leak
@@ -1290,11 +1326,85 @@ public class YOLOView: UIView, VideoCaptureDelegate {
     )
   }
 
+  public func takeHighResPhoto(completion: @escaping (Data?) -> Void) {
+    self.rawPhotoCaptureCompletion = completion
+    let settings = AVCapturePhotoSettings()
+    if self.videoCapture.photoOutput.isHighResolutionCaptureEnabled {
+      settings.isHighResolutionPhotoEnabled = true
+    }
+    usleep(20_000)  // short delay to allow camera to focus
+    self.videoCapture.photoOutput.capturePhoto(
+      with: settings, delegate: self as AVCapturePhotoCaptureDelegate
+    )
+  }
+
+  public func setFlashlight(_ enable: Bool) -> Bool {
+    guard
+      let currentInput = self.videoCapture.captureSession.inputs.first as? AVCaptureDeviceInput
+    else {
+      return false
+    }
+
+    let device = currentInput.device
+    guard device.hasTorch else {
+      return false
+    }
+
+    do {
+      try device.lockForConfiguration()
+      defer { device.unlockForConfiguration() }
+      if enable {
+        try device.setTorchModeOn(level: AVCaptureDevice.maxAvailableTorchLevel)
+      } else {
+        device.torchMode = .off
+      }
+      return true
+    } catch {
+      print("Failed to toggle torch: \(error.localizedDescription)")
+      return false
+    }
+  }
+
   public func setInferenceFlag(ok: Bool) {
     videoCapture.inferenceOK = ok
   }
 
+  private func makeOrientedImage(from dataImage: Data) -> UIImage? {
+    guard
+      let dataProvider = CGDataProvider(data: dataImage as CFData),
+      let cgImageRef = CGImage(
+        jpegDataProviderSource: dataProvider, decode: nil, shouldInterpolate: true,
+        intent: .defaultIntent)
+    else {
+      return UIImage(data: dataImage)
+    }
+
+    let isCameraFront =
+      (self.videoCapture.captureSession.inputs.first as? AVCaptureDeviceInput)?.device.position
+      == .front
+    var orientation: CGImagePropertyOrientation = isCameraFront ? .leftMirrored : .right
+    switch UIDevice.current.orientation {
+    case .landscapeLeft:
+      orientation = isCameraFront ? .downMirrored : .up
+    case .landscapeRight:
+      orientation = isCameraFront ? .upMirrored : .down
+    default:
+      break
+    }
+
+    var image = UIImage(cgImage: cgImageRef, scale: 0.5, orientation: .right)
+    if let orientedCIImage = CIImage(image: image)?.oriented(orientation),
+      let cgImage = CIContext().createCGImage(orientedCIImage, from: orientedCIImage.extent)
+    {
+      image = UIImage(cgImage: cgImage)
+    }
+    return image
+  }
+
   deinit {
+    if YOLOView.currentInstance === self {
+      YOLOView.currentInstance = nil
+    }
     // Ensure camera is stopped when view is deallocated
     videoCapture.stop()
 
@@ -1322,31 +1432,20 @@ extension YOLOView: AVCapturePhotoCaptureDelegate {
       print("error occurred : \(error.localizedDescription)")
     }
     if let dataImage = photo.fileDataRepresentation() {
-      let dataProvider = CGDataProvider(data: dataImage as CFData)
-      let cgImageRef: CGImage! = CGImage(
-        jpegDataProviderSource: dataProvider!, decode: nil, shouldInterpolate: true,
-        intent: .defaultIntent)
-      var isCameraFront = false
-      if let currentInput = self.videoCapture.captureSession.inputs.first as? AVCaptureDeviceInput,
-        currentInput.device.position == .front
-      {
-        isCameraFront = true
+      guard let image = makeOrientedImage(from: dataImage) else {
+        rawPhotoCaptureCompletion?(nil)
+        rawPhotoCaptureCompletion = nil
+        photoCaptureCompletion?(nil)
+        photoCaptureCompletion = nil
+        return
       }
-      var orientation: CGImagePropertyOrientation = isCameraFront ? .leftMirrored : .right
-      switch UIDevice.current.orientation {
-      case .landscapeLeft:
-        orientation = isCameraFront ? .downMirrored : .up
-      case .landscapeRight:
-        orientation = isCameraFront ? .upMirrored : .down
-      default:
-        break
+
+      if let rawCompletion = rawPhotoCaptureCompletion {
+        rawCompletion(image.jpegData(compressionQuality: 0.95))
+        rawPhotoCaptureCompletion = nil
+        return
       }
-      var image = UIImage(cgImage: cgImageRef, scale: 0.5, orientation: .right)
-      if let orientedCIImage = CIImage(image: image)?.oriented(orientation),
-        let cgImage = CIContext().createCGImage(orientedCIImage, from: orientedCIImage.extent)
-      {
-        image = UIImage(cgImage: cgImage)
-      }
+
       let imageView = UIImageView(image: image)
       imageView.contentMode = .scaleAspectFill
       imageView.frame = self.frame

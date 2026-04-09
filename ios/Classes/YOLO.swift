@@ -16,6 +16,37 @@ import Foundation
 import SwiftUI
 import UIKit
 
+private func resolveBundledCoreMLModelPath(_ modelPathOrName: String) -> URL? {
+  let fileName = modelPathOrName.components(separatedBy: "/").last ?? modelPathOrName
+  let fileComponents = fileName.components(separatedBy: ".")
+  let name = fileComponents.dropLast().joined(separator: ".")
+  let ext = fileComponents.last ?? ""
+
+  if !name.isEmpty && !ext.isEmpty {
+    if let path = Bundle.main.path(forResource: name, ofType: ext) {
+      return URL(fileURLWithPath: path)
+    }
+  }
+
+  if let compiledURL = Bundle.main.url(forResource: modelPathOrName, withExtension: "mlmodelc") {
+    return compiledURL
+  }
+  if let packageURL = Bundle.main.url(forResource: modelPathOrName, withExtension: "mlpackage") {
+    return packageURL
+  }
+
+  if !name.isEmpty {
+    if let compiledURL = Bundle.main.url(forResource: name, withExtension: "mlmodelc") {
+      return compiledURL
+    }
+    if let packageURL = Bundle.main.url(forResource: name, withExtension: "mlpackage") {
+      return packageURL
+    }
+  }
+
+  return nil
+}
+
 /// The primary interface for working with YOLO models, supporting multiple input types and inference methods.
 public class YOLO {
   var predictor: Predictor!
@@ -63,17 +94,11 @@ public class YOLO {
         } else if lowercasedPath.hasSuffix(".mlmodel") && !isDirectory.boolValue {
           modelURL = possibleURL
         }
+      } else {
+        modelURL = resolveBundledCoreMLModelPath(modelPathOrName)
       }
     } else {
-      // バンドル内のコンパイル済みモデルをチェック - これは既に実装済み
-      if let compiledURL = Bundle.main.url(forResource: modelPathOrName, withExtension: "mlmodelc")
-      {
-        modelURL = compiledURL
-      } else if let packageURL = Bundle.main.url(
-        forResource: modelPathOrName, withExtension: "mlpackage")
-      {
-        modelURL = packageURL
-      }
+      modelURL = resolveBundledCoreMLModelPath(modelPathOrName)
     }
 
     // モデルURLがまだ見つからなかった場合は、Flutterアセットをチェック

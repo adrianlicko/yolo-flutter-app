@@ -39,10 +39,8 @@ class PoseEstimator(
 ) : BasePredictor() {
 
     companion object {
-        // xywh(4) + conf(1) + keypoints(4*2=8) = 13
-        private const val OUTPUT_FEATURES = 13
         private const val KEYPOINTS_COUNT = 4
-        private const val KEYPOINTS_FEATURES = KEYPOINTS_COUNT * 2 // x, y, conf per keypoint
+        private const val KEYPOINTS_FEATURES = KEYPOINTS_COUNT * 2
         private const val MAX_POOL_SIZE = 100 
         
         private const val INPUT_SIZE = 640
@@ -106,6 +104,8 @@ class PoseEstimator(
     // Output dimensions
     private var batchSize = 0
     private var numAnchors = 0
+    private var keypointStartIndex = 5
+    private var numClasses = 1
 
     init {
         val modelBuffer = YOLOUtils.loadModelFile(context, modelPath)
@@ -148,9 +148,12 @@ class PoseEstimator(
         batchSize = outputShape[0]           // 1
         val outFeatures = outputShape[1]     // 56
         numAnchors = outputShape[2]          // 2100 etc.
-        require(outFeatures == OUTPUT_FEATURES) {
-            "Unexpected output feature size. Expected=$OUTPUT_FEATURES, Actual=$outFeatures"
+        val derivedNumClasses = outFeatures - 4 - KEYPOINTS_FEATURES
+        require(derivedNumClasses >= 1) {
+            "Unexpected output feature size. Expected at least ${4 + 1 + KEYPOINTS_FEATURES}, Actual=$outFeatures"
         }
+        numClasses = derivedNumClasses
+        keypointStartIndex = 4 + numClasses
         
         outputArray = Array(batchSize) {
             Array(outFeatures) { FloatArray(numAnchors) }
@@ -275,7 +278,15 @@ class PoseEstimator(
             val rawY = features[1][j]       // 0..1
             val rawW = features[2][j]       // 0..1
             val rawH = features[3][j]       // 0..1
-            val conf = features[4][j]       // 0..1
+            var classIndex = 0
+            var conf = features[4][j]
+            for (classOffset in 1 until numClasses) {
+                val classScore = features[4 + classOffset][j]
+                if (classScore > conf) {
+                    conf = classScore
+                    classIndex = classOffset
+                }
+            }
 
             if (conf < confidenceThreshold) continue
 
@@ -302,8 +313,8 @@ class PoseEstimator(
             val kpArray = mutableListOf<Pair<Float, Float>>()
             val kpConfArray = mutableListOf<Float>()
             for (k in 0 until KEYPOINTS_COUNT) {
-                val rawKx = features[5 + k * 2][j]
-                val rawKy = features[5 + k * 2 + 1][j]
+                val rawKx = features[keypointStartIndex + k * 2][j]
+                val rawKy = features[keypointStartIndex + k * 2 + 1][j]
                 // my model does not send confidence for keypoints, so we set it to 1.0f for now
                 val kpC   = 1.0f 
 
@@ -333,8 +344,8 @@ class PoseEstimator(
                 (fx / origWidth) to (fy / origHeight)
             }
             
-            boxObj.index = 0
-            boxObj.cls = "person"
+            boxObj.index = classIndex
+            boxObj.cls = labels.getOrNull(classIndex) ?: "class_$classIndex"
             boxObj.conf = conf
             boxObj.xywh.set(rectF)
             boxObj.xywhn.set(normBox)

@@ -478,7 +478,9 @@ func drawKeypoints(
   drawSkeleton: Bool = true
 ) {
   let _radius = max(originalImageSize.width, originalImageSize.height) / 300
-  for (i, keypoints) in keypointsList.enumerated() {
+  let personCount = min(keypointsList.count, confsList.count, boundingBoxes.count)
+  for i in 0..<personCount {
+    let keypoints = keypointsList[i]
     drawSinglePersonKeypoints(
       keypoints: keypoints, confs: confsList[i], boundingBox: boundingBoxes[i],
       on: layer,
@@ -502,17 +504,13 @@ func drawSinglePersonKeypoints(
   confThreshold: Float,
   drawSkeleton: Bool
 ) {
-  //      guard keypoints.count == 17 else {
-  //        print("Keypoints array must have 51 elements.")
-  //        return
-  //      }
+  guard !keypoints.isEmpty, !confs.isEmpty else { return }
+
   let lineWidth = radius * 0.4
-  let scaleXToView = Float(imageViewSize.width / originalImageSize.width)
-  let scaleYToView = Float(imageViewSize.height / originalImageSize.height)
+  let pointCount = min(keypoints.count, confs.count)
+  var points: [(CGPoint, Float)] = Array(repeating: (CGPoint.zero, 0), count: pointCount)
 
-  var points: [(CGPoint, Float)] = Array(repeating: (CGPoint.zero, 0), count: 17)
-
-  for i in 0..<17 {
+  for i in 0..<pointCount {
     let x = keypoints[i].x * Float(imageViewSize.width)
     let y = keypoints[i].y * Float(imageViewSize.height)
     let conf = confs[i]
@@ -525,11 +523,13 @@ func drawSinglePersonKeypoints(
     {
       points[i] = (point, conf)
 
-      drawCircle(on: layer, at: point, radius: radius, color: kptColorIndices[i])
+      let colorIndex =
+        i < kptColorIndices.count ? kptColorIndices[i] : (i % ultralyticsColors.count)
+      drawCircle(on: layer, at: point, radius: radius, color: colorIndex)
     }
   }
 
-  if drawSkeleton {
+  if drawSkeleton && pointCount == 17 {
     for (index, bone) in skeleton.enumerated() {
       let (startIdx, endIdx) = (bone[0] - 1, bone[1] - 1)
 

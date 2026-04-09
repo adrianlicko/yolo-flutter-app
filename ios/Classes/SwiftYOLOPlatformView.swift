@@ -325,6 +325,20 @@ public class SwiftYOLOPlatformView: NSObject, FlutterPlatformView, FlutterStream
             ))
         }
 
+      case "setDetectionEnabled":
+        if let args = call.arguments as? [String: Any],
+          let enabled = args["enabled"] as? Bool
+        {
+          yoloView?.setInferenceFlag(ok: enabled)
+          result(nil)
+        } else {
+          result(
+            FlutterError(
+              code: "invalid_args", message: "Invalid arguments for setDetectionEnabled",
+              details: nil
+            ))
+        }
+
       case "switchCamera":
 
         self.yoloView?.switchCameraTapped()
